@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ESP32Board } from './ESP32Model';
 import { DataConnection, useContainerSize, pctToPx } from './DataConnection';
@@ -28,6 +28,62 @@ export function HardwareExplorer() {
   const [hovered, setHovered] = useState<string | null>(null);
   const [selected, setSelected] = useState<SensorInfo | null>(null);
   const { ref, size } = useContainerSize();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sensorRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const boardRef = useRef<HTMLDivElement>(null);
+  const [wireAnchors, setWireAnchors] = useState<Record<string, { from: { x: number; y: number }; to: { x: number; y: number } }>>({});
+
+  const updateWireAnchors = useCallback(() => {
+    const container = containerRef.current ?? ref.current;
+    const board = boardRef.current;
+    if (!container || !board) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const boardRect = board.getBoundingClientRect();
+    const boardLeft = boardRect.left - containerRect.left;
+    const boardRight = boardRect.right - containerRect.left;
+    const boardTop = boardRect.top - containerRect.top;
+    const boardBottom = boardRect.bottom - containerRect.top;
+
+    const anchors: Record<string, { from: { x: number; y: number }; to: { x: number; y: number } }> = {};
+
+    SENSORS.forEach((s, i) => {
+      const node = sensorRefs.current[s.id];
+      if (!node) return;
+
+      const rect = node.getBoundingClientRect();
+      const sensorCenterY = rect.top - containerRect.top + rect.height / 2;
+      const side = POSITIONS[i].x < 50 ? 'left' : 'right';
+      const sensorOrder = side === 'left' ? SENSORS.filter((item) => item.position.x < 0).findIndex((item) => item.id === s.id) : SENSORS.filter((item) => item.position.x > 0).findIndex((item) => item.id === s.id);
+      const targetY = boardTop + (boardBottom - boardTop) * (0.2 + sensorOrder * 0.28);
+
+      anchors[s.id] = {
+        from: {
+          x: side === 'left' ? rect.right - containerRect.left + 12 : rect.left - containerRect.left - 12,
+          y: sensorCenterY,
+        },
+        to: {
+          x: side === 'left' ? boardLeft + 12 : boardRight - 12,
+          y: targetY,
+        },
+      };
+    });
+
+    setWireAnchors(anchors);
+  }, [ref]);
+
+  useEffect(() => {
+    updateWireAnchors();
+    const resizeObserver = new ResizeObserver(updateWireAnchors);
+    const observed = containerRef.current ?? ref.current;
+    if (observed) resizeObserver.observe(observed);
+    window.addEventListener('resize', updateWireAnchors);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateWireAnchors);
+    };
+  }, [ref, updateWireAnchors]);
 
   const getVal = (id: string) => {
     switch (id) {
@@ -56,14 +112,17 @@ export function HardwareExplorer() {
         <div ref={ref} className="relative mx-auto h-[500px] max-w-4xl">
           {/* Connection wires — only render once we have measured dimensions */}
           {hasSize && SENSORS.map((s, i) => {
-            const from = pctToPx(POSITIONS[i], size);
-            const to = pctToPx(center, size);
+            const anchor = wireAnchors[s.id] ?? {
+              from: pctToPx(POSITIONS[i], size),
+              to: pctToPx(center, size),
+            };
+
             return (
               <DataConnection
                 key={s.id}
                 id={s.id}
-                from={from}
-                to={to}
+                from={anchor.from}
+                to={anchor.to}
                 color={s.color}
                 active={hovered === s.id || hovered === null}
                 delay={i * 0.15}
@@ -72,7 +131,7 @@ export function HardwareExplorer() {
           })}
 
           {/* ESP32 center */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div ref={boardRef} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <ESP32Board size={180} />
           </div>
 
@@ -83,6 +142,9 @@ export function HardwareExplorer() {
             return (
               <motion.div
                 key={s.id}
+                ref={(node) => {
+                  sensorRefs.current[s.id] = node;
+                }}
                 onHoverStart={() => setHovered(s.id)}
                 onHoverEnd={() => setHovered(null)}
                 onClick={() => setSelected(s)}

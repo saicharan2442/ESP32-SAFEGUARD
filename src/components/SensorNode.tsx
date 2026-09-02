@@ -20,13 +20,15 @@ interface SensorNodeProps {
   onHover: (id: string | null) => void;
   onClick: (sensor: SensorInfo) => void;
   side: 'left' | 'right';
+  nodeRef?: (node: HTMLDivElement | null) => void;
 }
 
-export function SensorNode({ sensor, value, status, hovered, onHover, onClick, side }: SensorNodeProps) {
+export function SensorNode({ sensor, value, status, hovered, onHover, onClick, side, nodeRef }: SensorNodeProps) {
   const Icon = ICONS[sensor.icon] ?? Flame;
 
   return (
     <motion.div
+      ref={nodeRef}
       onHoverStart={() => onHover(sensor.id)}
       onHoverEnd={() => onHover(null)}
       onClick={() => onClick(sensor)}

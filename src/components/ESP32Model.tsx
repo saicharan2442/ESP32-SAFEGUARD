@@ -1,11 +1,13 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
+import type { Ref } from 'react';
 
-export function ESP32Board({ size = 200 }: { size?: number }) {
+export function ESP32Board({ size = 200, boardRef }: { size?: number; boardRef?: Ref<HTMLDivElement> }) {
   const [hovered, setHovered] = useState(false);
 
   return (
     <motion.div
+      ref={boardRef}
       onHoverStart={() => setHovered(true)}
       onHoverEnd={() => setHovered(false)}
       className="relative"

@@ -17,15 +17,16 @@ export function DataConnection({ from, to, color, active, delay = 0, id }: DataC
   const nx = dx / dist;
   const ny = dy / dist;
 
-  const startGap = 38;
-  const endGap = 95;
+  const startGap = 0;
+  const endGap = 0;
   const sx = from.x + nx * startGap;
   const sy = from.y + ny * startGap;
   const ex = to.x - nx * endGap;
   const ey = to.y - ny * endGap;
 
   const midX = (sx + ex) / 2;
-  const midY = (sy + ey) / 2 - 25;
+  const curveLift = Math.min(120, Math.max(28, Math.abs(dx) * 0.18 + 20));
+  const midY = (sy + ey) / 2 - curveLift;
   const path = `M ${sx} ${sy} Q ${midX} ${midY} ${ex} ${ey}`;
   const pathId = `p-${id}`;
   const gradId = `g-${id}`;

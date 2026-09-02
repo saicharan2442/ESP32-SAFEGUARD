@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ESP32Board } from './ESP32Model';
 import { SensorNode } from './SensorNode';
@@ -13,6 +13,61 @@ export function Hero() {
   const [hoveredSensor, setHoveredSensor] = useState<string | null>(null);
   const [selectedSensor, setSelectedSensor] = useState<SensorInfo | null>(null);
   const [hoveringESP32, setHoveringESP32] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const sensorRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [wireAnchors, setWireAnchors] = useState<Record<string, { from: { x: number; y: number }; to: { x: number; y: number } }>>({});
+
+  const updateWireAnchors = useCallback(() => {
+    const container = containerRef.current;
+    const board = boardRef.current;
+    if (!container || !board) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const boardRect = board.getBoundingClientRect();
+    const boardLeft = boardRect.left - containerRect.left;
+    const boardRight = boardRect.right - containerRect.left;
+    const boardTop = boardRect.top - containerRect.top;
+    const boardBottom = boardRect.bottom - containerRect.top;
+
+    const nextAnchors: Record<string, { from: { x: number; y: number }; to: { x: number; y: number } }> = {};
+
+    SENSORS.forEach((s) => {
+      const node = sensorRefs.current[s.id];
+      if (!node) return;
+
+      const rect = node.getBoundingClientRect();
+      const centerY = rect.top - containerRect.top + rect.height / 2;
+      const side = s.position.x < 0 ? 'left' : 'right';
+      const sensorOrder = side === 'left' ? SENSORS.filter((item) => item.position.x < 0).findIndex((item) => item.id === s.id) : SENSORS.filter((item) => item.position.x > 0).findIndex((item) => item.id === s.id);
+      const targetY = boardTop + (boardBottom - boardTop) * (0.2 + sensorOrder * 0.28);
+
+      nextAnchors[s.id] = {
+        from: {
+          x: side === 'left' ? rect.right - containerRect.left + 12 : rect.left - containerRect.left - 12,
+          y: centerY,
+        },
+        to: {
+          x: side === 'left' ? boardLeft + 12 : boardRight - 12,
+          y: targetY,
+        },
+      };
+    });
+
+    setWireAnchors(nextAnchors);
+  }, []);
+
+  useEffect(() => {
+    updateWireAnchors();
+    const resizeObserver = new ResizeObserver(updateWireAnchors);
+    if (containerRef.current) resizeObserver.observe(containerRef.current);
+    window.addEventListener('resize', updateWireAnchors);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateWireAnchors);
+    };
+  }, [updateWireAnchors]);
 
   const getSensorValue = (id: string): string => {
     switch (id) {
@@ -125,20 +180,27 @@ export function Hero() {
 
           {/* Right: ESP32 + sensors */}
           <div className="relative flex items-center justify-center py-8 lg:py-16">
-            <div className="relative h-[420px] w-full max-w-[640px]">
+            <div ref={containerRef} className="relative h-[420px] w-full max-w-[640px]">
               {/* Connection lines container */}
               <div className="absolute inset-0">
-                {SENSORS.map((s, i) => (
-                  <DataConnection
-                    key={s.id}
-                    id={`hero-${s.id}`}
-                    from={{ x: s.position.x < 0 ? 100 : 540, y: 60 + i * 40 }}
-                    to={{ x: 320, y: 210 }}
-                    color={s.color}
-                    active={hoveredSensor === s.id || hoveredSensor === null}
-                    delay={i * 0.2}
-                  />
-                ))}
+                {SENSORS.map((s, i) => {
+                  const anchor = wireAnchors[s.id] ?? {
+                    from: { x: s.position.x < 0 ? 80 : 560, y: 60 + i * 55 },
+                    to: { x: 320, y: 210 },
+                  };
+
+                  return (
+                    <DataConnection
+                      key={s.id}
+                      id={`hero-${s.id}`}
+                      from={anchor.from}
+                      to={anchor.to}
+                      color={s.color}
+                      active={hoveredSensor === s.id || hoveredSensor === null}
+                      delay={i * 0.2}
+                    />
+                  );
+                })}
               </div>
 
               {/* Left sensors */}
@@ -153,6 +215,9 @@ export function Hero() {
                     onHover={setHoveredSensor}
                     onClick={setSelectedSensor}
                     side="left"
+                    nodeRef={(node) => {
+                      sensorRefs.current[s.id] = node;
+                    }}
                   />
                 ))}
               </div>
@@ -169,12 +234,16 @@ export function Hero() {
                     onHover={setHoveredSensor}
                     onClick={setSelectedSensor}
                     side="right"
+                    nodeRef={(node) => {
+                      sensorRefs.current[s.id] = node;
+                    }}
                   />
                 ))}
               </div>
 
               {/* ESP32 center */}
               <motion.div
+                ref={boardRef}
                 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
                 onHoverStart={() => setHoveringESP32(true)}
                 onHoverEnd={() => setHoveringESP32(false)}

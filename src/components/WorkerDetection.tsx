@@ -28,7 +28,7 @@ export function WorkerDetection() {
 
   const startCamera = useCallback(async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setCamError('Camera not available. This feature requires HTTPS or localhost. In Bolt preview, camera access may be restricted.');
+      setCamError('Camera not available. This feature requires HTTPS or localhost. In  preview, camera access may be restricted.');
       setCamStatus('error');
       return;
     }
